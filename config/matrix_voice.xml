@@ -1,0 +1,12 @@
+<hark_xml version="1.3">
+    <positions type="microphone" coordinate="cartesian">
+        <position x=" 0.00000" y=" 0.00000" z="0.00000" id="0"/>
+        <position x="-0.03813" y=" 0.00358" z="0.00000" id="1"/>
+        <position x="-0.02098" y=" 0.03204" z="0.00000" id="2"/>
+        <position x=" 0.01197" y=" 0.03638" z="0.00000" id="3"/>
+        <position x=" 0.03591" y=" 0.01332" z="0.00000" id="4"/>
+        <position x=" 0.03281" y="-0.01977" z="0.00000" id="5"/>
+        <position x=" 0.00500" y="-0.03797" z="0.00000" id="6"/>
+        <position x="-0.02657" y="-0.02758" z="0.00000" id="7"/>
+    </positions>
+</hark_xml>

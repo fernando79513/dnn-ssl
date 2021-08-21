@@ -1,0 +1,19 @@
+{
+    "speakers": {
+        "count": 1
+    },
+    "noises": {
+        "count": 0
+    },
+    "mic_array": {
+        "name": "matrix_voice",
+        "mic_count": 8 
+    },
+    "gcc_phat": {
+        "length": 4000, 
+        "max_tau": 9, 
+        "interp": 4
+    },
+    "fs": 16000,
+    "test": false
+}
