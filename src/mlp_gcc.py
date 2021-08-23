@@ -49,5 +49,5 @@ if __name__ == "__main__":
     # model = define_model(73*7)
     # plot_model(model, to_file='img/model.png')
 
-    output = pd.read_feather('data/matrix_voice/test/out.ftr')
-    print(output)
+    output = pd.read_feather('data/matrix_voice/out.ftr')
+    print(np.max(output["id"].to_numpy()))

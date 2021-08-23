@@ -32,7 +32,7 @@ def input_to_pandas(index, fpt_list, cc_list):
     df = pd.DataFrame(data, columns=labels)
     df[['frame', 'mics']] = df[['frame', 'mics']].astype(int)
     df['tau'] = df['tau'].astype(np.float16)
-    df.insert(loc=0, column='index', value=f'{index:0>4}')
+    df.insert(loc=0, column='id', value=f'{index:0>4}')
     return df
 
 
@@ -56,7 +56,7 @@ def create_csvs(params):
     length = params['gcc_phat']['length'] 
     max_tau = params['gcc_phat']['max_tau'] 
     interp = params['gcc_phat']['interp']
-    mic_pairs = [[1,4], [2,5], [3,6], [4,7], [5,1], [6,2], [7,3]]
+    mic_pairs = params['gcc_phat']['mic_pairs']
 
     simulation_df = pd.read_csv(f'{base_path}positions_{f_name}.csv')
     label_gen = LabelGenerator(simulation_df, params)
@@ -83,21 +83,17 @@ def create_csvs(params):
             df_gcc.to_csv(gcc_file)
             df_out.to_csv(out_file)
 
+        # else:
+            # df_gcc = pd.read_csv(gcc_file, index_col=0)
+            # n_frames = int(len(df_gcc)/len(mic_pairs)) 
+            # df_out = label_gen.prepare_labels(i, n_frames)
+            # df_out.to_csv(out_file)           
+
+            # df_out = pd.read_csv(out_file, index_col=0)
+            # df_out["id"] = [f'{i:0>4}']*len(df_out["id"])
+            # df_out.to_csv(out_file)
+
     return
-
-
-def main(self, noise, radius):
-
-
-    self.df_sim = pd.read_csv('{}/positions.csv'.format(self.path_in))
-
-    
-    if not os.path.exists(self.path_out):
-        print('Creating directory {}'.format(self.path_out))
-        os.makedirs(self.path_out)
-
-
-    create_csvs()
 
 if __name__ == '__main__':
 

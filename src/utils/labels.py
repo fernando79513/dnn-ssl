@@ -70,11 +70,11 @@ class LabelGenerator:
             df_out.loc[i] = data
         return df_out
 
-    def prepare_labels(self, i, n_frames):
+    def prepare_labels(self, index, n_frames):
         '''Gather the information from the simulation csv and prepare the
         labels for training. Take into account the duration of the speech
         to create the label of the speech segment'''
-        info = self.sim_df.iloc[i-1]
+        info = self.sim_df.iloc[index-1]
         angles = []
         audios = []
         for i in range(self.speaker_count): 
@@ -83,7 +83,7 @@ class LabelGenerator:
             angles.append(speaker_pos[0])
     
         # TODO See if it makes sense to add noise angles
-        df_out = self.prepare_output(i, info, angles, n_frames)
+        df_out = self.prepare_output(index, info, angles, n_frames)
         return df_out     
 
 
