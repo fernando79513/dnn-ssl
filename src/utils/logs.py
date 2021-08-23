@@ -1,7 +1,7 @@
 import logging
 
 def set_logs():
-    logging.basicConfig(filename='simulations.log', 
+    logging.basicConfig(filename='dnn.log', 
         format='%(asctime)s %(message)s', level=logging.INFO)
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)

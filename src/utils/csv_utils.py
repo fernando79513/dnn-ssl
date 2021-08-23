@@ -24,6 +24,8 @@ def read_sim_csv(file):
     df_sim = pd.read_csv(file)
     return df_sim
 
+def combine_csvs():
+    pass
 
 if __name__ == "__main__" :
     pass

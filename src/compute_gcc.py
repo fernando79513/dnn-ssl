@@ -1,10 +1,3 @@
-
-
-# # Data Preparation
-
-import logging
-from operator import length_hint
-from numpy.lib.utils import info
 from scipy.io import wavfile
 import numpy as np
 import pandas as pd
@@ -12,12 +5,12 @@ import os
 import json
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import h5py
 import os
+# import h5py
 
 
 from src.utils import logs
-from src.utils import csv_utils
+# from src.utils import csv_utils
 from src.utils import gcc_phat
 from src.utils.labels import LabelGenerator
 
@@ -42,16 +35,6 @@ def input_to_pandas(index, fpt_list, cc_list):
     df.insert(loc=0, column='index', value=f'{index:0>4}')
     return df
 
-
-def save_to_csv(df_inp, df_out, index):
-    import os
-    inp = '{}/inp_{:0>4}.csv'.format(self.path_out, index) 
-    if not os.path.isfile(inp):
-        df_inp.to_csv(inp)
-    out = '{}/out_{:0>4}.csv'.format(self.path_out, index)
-    if not os.path.isfile(out):
-        df_out.to_csv(out)
-    return
 
 def create_csvs(params):
     if params['test']:
@@ -80,24 +63,25 @@ def create_csvs(params):
     # hf = h5py.File(f'{data_path}gcc_{f_name}.h5', 'w')
 
     for i in range(1,len(simulation_df.index)+1):
-        wav_file = f'{f_name}_{i:0>4}.wav'
-        wav = wavfile.read(f'{base_path}{wav_file}')[1]
-        logs.log_simulation(wav_file, params)
 
-        fpt_list, cc_list = gcc_phat.prepare_input(
-            wav, mic_pairs, length, max_tau, interp)
-        csv_gcc = f'{data_path}gcc_{f_name}_{i:0>4}.csv'
-        
-        df_gcc = input_to_pandas(i, fpt_list, cc_list)
-        df_gcc.to_csv(csv_gcc)
-        
-        n_frames = int(len(fpt_list)/len(mic_pairs)) 
-        df_out = label_gen.prepare_labels(i, n_frames)
-        csv_out = f'{data_path}out_{f_name}_{i:0>4}.csv'
-        df_out.to_csv(csv_out)
-        # df_out = output_to_pandas(FA,AP)
+        gcc_file = f'{data_path}gcc_{f_name}_{i:0>4}.csv'
+        out_file = f'{data_path}out_{f_name}_{i:0>4}.csv'
 
-        # save_to_csv(df_inp, df_out, index)
+        if not os.path.isfile(gcc_file) and not os.path.isfile(gcc_file):
+            wav_file = f'{f_name}_{i:0>4}.wav'
+            wav = wavfile.read(f'{base_path}{wav_file}')[1]
+            logs.log_simulation(wav_file, params)
+
+            fpt_list, cc_list = gcc_phat.prepare_input(
+                wav, mic_pairs, length, max_tau, interp)
+            
+            df_gcc = input_to_pandas(i, fpt_list, cc_list)
+            
+            n_frames = int(len(fpt_list)/len(mic_pairs)) 
+            df_out = label_gen.prepare_labels(i, n_frames)
+
+            df_gcc.to_csv(gcc_file)
+            df_out.to_csv(out_file)
 
     return
 
