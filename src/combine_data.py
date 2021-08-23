@@ -36,12 +36,11 @@ def combine_csvs(params):
                 continue
             gcc_list.append(gcc_file)
             out_list.append(out_file)
-            # if i == 2:
-            #     break
+
         
     gcc_df = pd.concat([pd.read_csv(f, index_col=0) for f in gcc_list], 
         ignore_index=True).fillna(0)
-    out_df = pd.concat([pd.read_csv(f, index_col=0) for f in gcc_list],
+    out_df = pd.concat([pd.read_csv(f, index_col=0) for f in out_list],
         ignore_index=True).fillna(0)
 
     print(gcc_df.isnull().sum().sum())
@@ -49,7 +48,8 @@ def combine_csvs(params):
 
     gcc_df.to_feather(f'{path}gcc.ftr')
     out_df.to_feather(f'{path}out.ftr')
-
+    # gcc_df.to_csv(f'{path}gcc.csv')
+    # out_df.to_csv(f'{path}out.csv')
 
     return
 
