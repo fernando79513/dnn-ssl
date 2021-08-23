@@ -50,4 +50,5 @@ if __name__ == "__main__":
     # plot_model(model, to_file='img/model.png')
 
     output = pd.read_feather('data/matrix_voice/out.ftr')
+    print(output)
     print(np.max(output["id"].to_numpy()))
