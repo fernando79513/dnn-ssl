@@ -83,31 +83,17 @@ def create_csvs(params):
             df_gcc.to_csv(gcc_file)
             df_out.to_csv(out_file)
 
-        else:
+        # else:
             # df_gcc = pd.read_csv(gcc_file, index_col=0)
             # n_frames = int(len(df_gcc)/len(mic_pairs)) 
             # df_out = label_gen.prepare_labels(i, n_frames)
             # df_out.to_csv(out_file)           
 
-            df_out = pd.read_csv(out_file, index_col=0)
-            df_out["id"] = [f'{i:0>4}']*len(df_out["id"])
-            df_out.to_csv(out_file)
+            # df_out = pd.read_csv(out_file, index_col=0)
+            # df_out["id"] = [f'{i:0>4}']*len(df_out["id"])
+            # df_out.to_csv(out_file)
 
     return
-
-
-def main(self, noise, radius):
-
-
-    self.df_sim = pd.read_csv('{}/positions.csv'.format(self.path_in))
-
-    
-    if not os.path.exists(self.path_out):
-        print('Creating directory {}'.format(self.path_out))
-        os.makedirs(self.path_out)
-
-
-    create_csvs()
 
 if __name__ == '__main__':
 
@@ -140,4 +126,3 @@ if __name__ == '__main__':
 
     # simulate_speech(params)
     print('DONE')
-# %%
