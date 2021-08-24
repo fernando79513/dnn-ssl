@@ -46,7 +46,7 @@ class LabelGenerator:
         else:
             audio_frames = [n_frames]
         
-        labels = ['id', 'number of speakers', 'number of noises']
+        labels = ['id', 'frame', 'number of speakers', 'number of noises']
         for j, angle in enumerate(angles):
             labels += [f'speaker angle {j}']
         for j in range(360):
@@ -55,7 +55,7 @@ class LabelGenerator:
 
         # TODO this is dirty, try to think a better way
         for i in range(n_frames):
-            data = [f'{index:0>4}', self.speaker_count, self.noise_count]
+            data = [f'{index:0>4}', i, self.speaker_count, self.noise_count]
             current_angles = []
             for j, angle in enumerate(angles):
                 if i < audio_frames[j]:
