@@ -1,22 +1,24 @@
+from numpy.core.records import fromstring
 import pandas as pd 
 import numpy as np
 import matplotlib.pyplot as plt
 import json
 
 import tensorflow as tf
-from keras.models import Model
-from keras.layers import (Input, Dense, Dropout, 
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import (Input, Dense, Dropout, Flatten,
     BatchNormalization, Activation)
-from keras.regularizers import l2
+from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import EarlyStopping, History
-import keras.backend as K
+import tensorflow.keras.backend as K
 
-from keras.utils.vis_utils import plot_model
-from sklearn.metrics import confusion_matrix,classification_report
-from tensorflow.python.keras.layers.core import Flatten
+# from keras.utils.vis_utils import plot_model
+from skimage.measure import block_reduce
 
-import wandb
-from wandb.keras import WandbCallback
+from src.utils.emd import earth_mover_distance
+
+# import wandb
+# from wandb.keras import WandbCallback
 
 def plot_training_history(history):
     plt.figure(figsize=(10,10))
@@ -31,8 +33,33 @@ def plot_training_history(history):
     plt.show()
 
 def define_model (input_shape=(7,73), output_size=360,
-    hidden=[256, 128, 32, 8], l2_param=.1, drop=0.4):
+    hidden=[500, 450, 400], drop=0.125, l2_param=.1):
 
+    # # Input layer
+    # inputs = Input(shape=input_shape,name="Input")
+    # flatten = Flatten(name="Flatten")(inputs)
+
+    # # First layer
+    # hidden1 = Dense(hidden[0],name="Hidden1")(flatten)
+    # act1 = Activation("relu",name="Activation1")(hidden1)
+    # drop1 = Dropout(drop, name="Dropout1")(act1)
+
+    # # Second hidden layer
+    # hidden2 = Dense(hidden[1],name="Hidden2")(drop1)
+    # act2 = Activation("relu",name="Activation2")(hidden2)
+    # drop2 = Dropout(drop, name="Dropout2")(act2)
+
+    # # Third hidden layer
+    # hidden3 = Dense(hidden[2],name="Hidden3")(drop2)
+    # act3 = Activation("relu",name="Activation3")(hidden3)
+    # drop3 = Dropout(drop, name="Dropout3")(act3)
+    
+    # # Output layer
+    # outputs = Dense(output_size, activation="sigmoid",
+    #     name="Output")(drop3)
+    # # outputs = Dense(output_size, 
+    # #     name="Output")(drop4)
+        
     # Input layer
     inputs = Input(shape=input_shape,name="Input")
     flatten = Flatten(name="Flatten")(inputs)
@@ -58,21 +85,20 @@ def define_model (input_shape=(7,73), output_size=360,
     act3 = Activation("relu",name="Activation3")(batch3)
     drop3 = Dropout(drop, name="Dropout3")(act3)
     
-    # Third hidden layer
-
-    hidden4 = Dense(hidden[3],name="Hidden4", 
-                    kernel_regularizer=l2(l2_param))(drop3)
-    batch4 = BatchNormalization(name="BatchNorm4")(hidden4)
-    act4 = Activation("relu",name="Activation4")(batch4)
-    drop4 = Dropout(drop, name="Dropout4")(act4)
-
     # Output layer
-    # outputs = Dense(output_size, activation='softmax',
+    outputs = Dense(output_size, activation="sigmoid",
+        name="Output")(drop3)
+    # outputs = Dense(output_size, 
     #     name="Output")(drop4)
-    outputs = Dense(output_size,
-        name="Output")(drop4)
+        
     model = Model(inputs=inputs, outputs=outputs)
     return model
+
+def change_out_res(labels, gamma):
+    output_size = labels.shape[1] // gamma
+    print(output_size)
+    labels = block_reduce(labels, (1, gamma), np.max)
+    return labels, output_size
 
 if __name__ == "__main__":
 
@@ -93,11 +119,18 @@ if __name__ == "__main__":
     out_df = pd.read_feather('data/matrix_voice/out.ftr')
     ones_src_df = out_df.loc[out_df['number of speakers'] == 1]
     ones_src_clean_df = ones_src_df.loc[ones_src_df['number of noises'] == 0]
-    print(ones_src_clean_df)
+
 
     angles_df = out_df.filter(regex='^[0-9]*$', axis=1)
     output_size = len(angles_df.columns)
     train_labels = np.array(angles_df)
+
+    # thresh = 1
+    # train_labels[train_labels >= thresh] = 1
+    # train_labels[train_labels < thresh] = 0
+    
+    train_labels, output_size = change_out_res(train_labels, 10)
+
 
     cc_df = gcc_df.filter(regex='^cc_[0-9]*$', axis=1)
 
@@ -107,23 +140,28 @@ if __name__ == "__main__":
     input_shape = (len(mic_pairs),len(cc_df.columns))
 
     train_inputs = train_inputs * 2 + .5
-    print(np.amax(train_inputs))
-    print(np.amin(train_inputs))
+
+    print(train_inputs.shape)
+    # train_labels = train_labels.reshape((-1,1,360))
+    # print(train_labels.shape)
+
 
     # run = wandb.init()
     # config = run.config
     # config.epochs = 10
 
 
-    model = define_model(input_shape)
-    plot_model(model, to_file='img/model.png')
+    model = define_model(input_shape, output_size=output_size)
+    # plot_model(model, to_file='img/model.png')
 
     # def custom_loss(y_true, y_pred):
     #     return K.mean(y_true - y_pred)**2
-    custom_loss = tf.keras.losses.SparseCategoricalCrossentropy(
-        from_logits=True, reduction="auto")
+    # custom_loss = tf.keras.losses.SparseCategoricalCrossentropy(
+    #     from_logits=True, reduction=tf.keras.losses.Reduction.SUM
+    # )
+    custom_loss = earth_mover_distance()
 
-    model.compile(optimizer ='adam',
+    model.compile(optimizer =tf.keras.optimizers.Adam(),
                 loss = custom_loss,
                 metrics=['accuracy'])
 
@@ -139,12 +177,12 @@ if __name__ == "__main__":
 
     history = model.fit(train_inputs, 
                         train_labels, 
+                        # batch_size=512,
                         epochs=100,
-                        # shuffle=True, 
+                        shuffle=True, 
                         callbacks=[earlyStopping],
                         # callbacks=[WandbCallback(), earlyStopping],
-                        # validation_split=.2
-
+                        validation_split=.2
                         )
-    model.save("data/model.h5")
+    model.save("data/model.h5", )
     print("Saved model to disk")

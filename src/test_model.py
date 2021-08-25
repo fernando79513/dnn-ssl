@@ -14,10 +14,14 @@ from tensorflow.keras.callbacks import EarlyStopping, History
 
 from keras.utils.vis_utils import plot_model
 from sklearn.metrics import confusion_matrix,classification_report
+from skimage.measure import block_reduce
+
 from tensorflow.python.keras.layers.core import Flatten
+from src.utils.emd import earth_mover_distance
 
 import wandb
 from wandb.keras import WandbCallback
+
 
 
 def test_model(model,x,y):
@@ -38,6 +42,11 @@ def test_model(model,x,y):
     plt.colorbar()
     plt.show()
 
+def change_out_res(labels, gamma):
+    output_size = labels.shape[1] // gamma
+    print(output_size)
+    labels = block_reduce(labels, (1, gamma), np.max)
+    return labels, output_size
 
 
 if __name__ == "__main__":
@@ -49,7 +58,7 @@ if __name__ == "__main__":
         params = json.load(f)
     mic_pairs = params['gcc_phat']['mic_pairs']
 
-    model = keras.models.load_model('data/model.h5')
+    model = keras.models.load_model('data/model.h5', custom_objects={"_earth_mover_distance": earth_mover_distance})
     print('model loaded')
     
     gcc_df = pd.read_feather('data/matrix_voice/test/gcc.ftr')
@@ -60,6 +69,9 @@ if __name__ == "__main__":
     angles_df = out_df.filter(regex='^[0-9]*$', axis=1)
     output_size = len(angles_df.columns)
     test_labels = np.array(angles_df)
+    test_labels, output_size = change_out_res(test_labels, 10)
+
+
 
     cc_df = gcc_df.filter(regex='^cc_[0-9]*$', axis=1)
 
