@@ -8,14 +8,11 @@ def set_logs():
     logging.getLogger('').addHandler(console)
     return
 
-def log_simulation(wav_file, params):
-    length = params['gcc_phat']['length'] 
-    max_tau = params['gcc_phat']['max_tau'] 
-    interp = params['gcc_phat']['interp']
+def log_simulation(wav_file, n_speakers, n_noises, params):
     mic_name = params['mic_array']['name']
-    speaker_count = params['speakers']['count']
-    noise_count = params['noises']['count']
-    mic_pairs = [[1,4], [2,5], [3,6], [4,7], [5,1], [6,2], [7,3]]
+    speaker_count = n_speakers
+    noise_count = n_noises
+    # mic_pairs = [[1,4], [2,5], [3,6], [4,7], [5,1], [6,2], [7,3]]
 
     logging.info('-----------------Start Processing-----------------')    
     logging.info(f'Processing: {wav_file}')

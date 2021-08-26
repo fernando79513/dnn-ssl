@@ -1,2 +1,5 @@
 *.csv
 *.ftr
+*.h5
+*.npy
+*.pkl

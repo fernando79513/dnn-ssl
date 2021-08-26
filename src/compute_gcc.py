@@ -57,6 +57,8 @@ def create_csvs(params):
     max_tau = params['gcc_phat']['max_tau'] 
     interp = params['gcc_phat']['interp']
     mic_pairs = params['gcc_phat']['mic_pairs']
+    n_speakers = params['speakers']['count']
+    n_noises = params['noises']['count']
 
     simulation_df = pd.read_csv(f'{base_path}positions_{f_name}.csv')
     label_gen = LabelGenerator(simulation_df, params)
@@ -70,7 +72,7 @@ def create_csvs(params):
         if not os.path.isfile(gcc_file) and not os.path.isfile(gcc_file):
             wav_file = f'{f_name}_{i:0>4}.wav'
             wav = wavfile.read(f'{base_path}{wav_file}')[1]
-            logs.log_simulation(wav_file, params)
+            logs.log_simulation(wav_file, n_speakers, n_noises, params)
 
             fpt_list, cc_list = gcc_phat.prepare_input(
                 wav, mic_pairs, length, max_tau, interp)
