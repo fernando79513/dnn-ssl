@@ -10,7 +10,7 @@ from tensorflow.keras.layers import (Input, Dense, Dropout, Flatten,
     BatchNormalization, Activation, Conv2D, LSTM, Bidirectional,
     TimeDistributed, GlobalAveragePooling1D, Reshape)
 from tensorflow.keras.regularizers import l2
-from tensorflow.keras.callbacks import EarlyStopping, History
+from tensorflow.keras.callbacks import EarlyStopping, History, ModelCheckpoint
 import tensorflow.keras.backend as K
 
 from keras.utils.vis_utils import plot_model
@@ -68,14 +68,15 @@ def locnet_cnn (input_shape=(8,257,1), output_size=72,
     cnn = Model(inputs=inputs,outputs=outputs, name="cnn")
     return cnn
 
-def locnet_blstm (locnet_cnn, input_shape=(20, 8, 257), q=72, output_size=36):
+def locnet_blstm (locnet_cnn, input_shape=(20, 8, 257), q=72, output_size=36,
+    drop = 0.4):
 
     # TODO: use BLSTMP
     inputs = Input(shape=input_shape)
-    reshape = Reshape((20, 8, 257,1))(inputs)
+    # reshape = Reshape((20, 8, 257,1))(inputs)
     # creating BLSTM
     time_dist = TimeDistributed(locnet_cnn)(inputs)
-    blstm = Bidirectional(LSTM(q, return_sequences=True),
+    blstm = Bidirectional(LSTM(q, return_sequences=True, dropout=drop),
         merge_mode='ave')(time_dist)
     average = GlobalAveragePooling1D()(blstm)
     outputs = Dense(output_size, activation="sigmoid", name="Output")(average)   
@@ -144,6 +145,8 @@ if __name__ == "__main__":
                 loss = 'categorical_crossentropy',
                 metrics=['accuracy'])
 
+    blstm.save("data/matrix_voice/models/blstm.h5", )
+    print("Saved model to disk")
     # Defining inputs and labels
     gamma = 10
     
@@ -173,8 +176,17 @@ if __name__ == "__main__":
     # plt.show()
     earlyStopping = EarlyStopping(monitor="val_accuracy", 
                                 patience=10,
-                                verbose=1,
-                                restore_best_weights=True)
+                                verbose=1)
+
+    checkpoint_filepath = 'data/matrix_voice/checkpoint/'
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_filepath,
+        save_weights_only=True,
+        monitor='val_accuracy',
+        mode='max',
+        save_best_only=True,
+        verbose=1)
+
     history = History()
 
     history = blstm.fit(pmaps, 
@@ -182,9 +194,8 @@ if __name__ == "__main__":
                         batch_size=128,
                         epochs=100,
                         shuffle=True, 
-                        callbacks=[earlyStopping],
+                        callbacks=[earlyStopping, checkpoint],
                         # callbacks=[WandbCallback(), earlyStopping],
                         validation_split=.1
                         )
-    blstm.save("data/blstm.h5", )
-    print("Saved model to disk")
+
