@@ -4,6 +4,7 @@ import pandas as pd
 import json
 
 # import tensorflow as tf
+import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 from keras.models import Model
@@ -17,6 +18,7 @@ from sklearn.metrics import confusion_matrix,classification_report
 from skimage.measure import block_reduce
 
 from tensorflow.python.keras.layers.core import Flatten
+from tensorflow.python.keras.saving import saved_model
 from src.utils.emd import earth_mover_distance
 
 import wandb
@@ -58,9 +60,10 @@ if __name__ == "__main__":
         params = json.load(f)
     mic_pairs = params['gcc_phat']['mic_pairs']
 
-    model = keras.models.load_model('data/model.h5', custom_objects={"_earth_mover_distance": earth_mover_distance})
+    model = tf.saved_model.load('data/models/checkpoints/saved_model.pb')
     print('model loaded')
     
+    exit()
     gcc_df = pd.read_feather('data/matrix_voice/test/gcc.ftr')
     out_df = pd.read_feather('data/matrix_voice/test/out.ftr')
 
@@ -98,4 +101,4 @@ if __name__ == "__main__":
     for i in range(10):
         plt.plot(test_labels[i])
         plt.plot(predictions[i])
-        plt.show()
+        plt.savefig(f"img/pred_{1:0>4}")

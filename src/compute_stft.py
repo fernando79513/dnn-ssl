@@ -47,7 +47,7 @@ def compute_stft(params):
         sim_path  = f"simulations/{params['mic_array']['name']}/"
         data_path = f"data/{params['mic_array']['name']}/"
 
-    data = pd.read_csv(f'{data_path}/data.csv')
+    data = pd.read_csv(f'{data_path}data.csv')
 
     if os.path.isfile(f'{data_path}stft_data.csv'):
         df = pd.read_csv(f'{data_path}stft_data.pkl')
@@ -63,24 +63,19 @@ def compute_stft(params):
     for _, row in data.iterrows():
         name = row[0]
         ftype = row[1]
-        stft_file = f'{data_path}stft_data_{name}_{ftype}.npy'
-        pmap_file = f'{data_path}pmap_{name}_{ftype}.npy'
-        if os.path.isfile(f'{data_path}stft_data_{name}_{ftype}.npy'):
-            continue
+
+        last_i = -1
+        for i in range(50):
+            if os.path.isfile(f'{data_path}stft_data_{name}_{ftype}_{i}.npy'):
+                last_i = i*100
+
         simulation_df = pd.read_csv(f'{sim_path}{name}/positions_{ftype}.csv')
         for id in simulation_df['id']:
+            if i < last_i:
+                continue
             sim = simulation_df.iloc[id-1]
             n_speakers = sim['number of speakers']
             n_noises = sim['number of noises']
-            
-
-            # Don't compute if it is already on the dataframe
-            if (last_row is not None and 
-                    n_speakers <= last_row['number of speakers'] and
-                    n_noises <= last_row['number of speakers'] and
-                    id < last_row['number of speakers']):
-                print('already done')
-                continue
 
             wav_file = f'{ftype}_{id:0>4}.wav'
             wav = wavfile.read(f'{sim_path}{name}/{wav_file}')[1]
@@ -105,10 +100,17 @@ def compute_stft(params):
                 p_map = np.angle(chunk)/(2*np.pi) + .5
                 phasemaps.append(p_map)
             
-        stft_data_np = np.array(stft_data)
-        p_map_np = np.array(phasemaps)
-        np.save(stft_file, stft_data_np)
-        np.save(pmap_file, p_map_np)
+            print('id is', id)
+            if id % 100 == 0:
+                print('saving file!')
+                stft_file = f'{data_path}stft_data_{name}_{ftype}_{id}.npy'
+                pmap_file = f'{data_path}pmap_{name}_{ftype}_{id}.npy'
+                stft_data_np = np.array(stft_data)
+                p_map_np = np.array(phasemaps)
+                np.save(stft_file, stft_data_np)
+                np.save(pmap_file, p_map_np)
+                phasemaps = []
+                stft_data = []
 
 
 
