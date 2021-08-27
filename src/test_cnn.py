@@ -1,25 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd 
 import json
 
 # import tensorflow as tf
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from keras.models import Model
-from keras.layers import (Input, Dense, Dropout, 
-    BatchNormalization, Activation)
-from keras.regularizers import l2
-from tensorflow.keras.callbacks import EarlyStopping, History
-
-from keras.utils.vis_utils import plot_model
 from sklearn.metrics import confusion_matrix,classification_report
-from skimage.measure import block_reduce
+from sklearn.utils import shuffle
 
-from tensorflow.python.keras.layers.core import Flatten
-from tensorflow.python.keras.saving import saved_model
-from src.utils.emd import earth_mover_distance
 from src.cnn_blstm_ss import encode_angles
 
 import wandb
@@ -63,39 +50,15 @@ if __name__ == "__main__":
 
     gamma = 10
     pmaps = np.load('data/matrix_voice/test/pmap_1_src_clean.npy')
-    stft_data = np.load('data/matrix_voice/stft_data_1_src_clean.npy')
+    stft_data = np.load('data/matrix_voice/test/stft_data_1_src_clean.npy')
 
    
     pmaps = np.moveaxis(pmaps, [0,1,2,3], [0,-2,-1,-3])
     angles = stft_data[:, -2:]
-    train_labels = encode_angles(angles, gamma)
-    print(train_labels[:5])
+    test_labels = encode_angles(angles, gamma)
+    print(test_labels[:5])
 
-    
-    exit()
-    gcc_df = pd.read_feather('data/matrix_voice/test/gcc.ftr')
-    out_df = pd.read_feather('data/matrix_voice/test/out.ftr')
-
-    gcc_df, out_df = shuffle_df(gcc_df, out_df, len(mic_pairs))
-
-    angles_df = out_df.filter(regex='^[0-9]*$', axis=1)
-    output_size = len(angles_df.columns)
-    test_labels = np.array(angles_df)
-    test_labels, output_size = change_out_res(test_labels, 10)
-
-
-
-    cc_df = gcc_df.filter(regex='^cc_[0-9]*$', axis=1)
-
-    test_inputs = np.array(cc_df)
-    test_inputs = np.reshape(test_inputs, (
-        -1, len(mic_pairs), len(cc_df.columns)))
-    input_shape = (len(mic_pairs),len(cc_df.columns))
-
-    test_inputs = test_inputs * 2 + .5
-
-
-    
+    s_pmaps, s_labels = shuffle(pmaps, test_labels)
 
     # print("Evaluate on test data")
     # results = model.evaluate(test_inputs, test_labels, batch_size=128)
@@ -104,10 +67,11 @@ if __name__ == "__main__":
     # Generate predictions (probabilities -- the output of the last layer)
     # on new data using `predict`
     print("Generate predictions for 3 samples")
-    predictions = model.predict(test_inputs[:10])
+    predictions = model.predict(s_pmaps[:20])
     print("predictions shape:", predictions.shape)
 
-    for i in range(10):
-        plt.plot(test_labels[i])
+    for i in range(20):
+        plt.plot(s_labels[i])
         plt.plot(predictions[i])
-        plt.savefig(f"img/pred_{1:0>4}")
+        plt.show()
+        # plt.savefig(f"img/pred_{1:0>4}")
