@@ -98,4 +98,4 @@ if __name__ == "__main__":
     for i in range(10):
         plt.plot(test_labels[i])
         plt.plot(predictions[i])
-        plt.show()
+        plt.savefig(f"img/pred_{1:0>4}")
