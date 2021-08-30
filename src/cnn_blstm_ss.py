@@ -7,7 +7,8 @@ import json
 import tensorflow as tf
 from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.layers import (Input, Dense, Dropout, Flatten,
-    Conv2D, LSTM, Bidirectional, TimeDistributed, GlobalAveragePooling1D)
+    Conv2D, LSTM, Bidirectional, TimeDistributed, GlobalAveragePooling1D,
+    Lambda)
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import EarlyStopping, History, ModelCheckpoint
 import tensorflow.keras.backend as K
@@ -16,36 +17,13 @@ from keras.utils.vis_utils import plot_model
 
 # from keras.utils.vis_utils import plot_model
 from skimage.measure import block_reduce
-from tensorflow.python.keras.backend import dropout
+from tensorflow.python.keras.backend import dropout, sigmoid
 from tensorflow.python.ops.gen_array_ops import reshape
 
-from src.utils.emd import earth_mover_distance
+from src.utils.emd import earth_mover_distance, pit_earth_mover_distance, pit_cce
 
 # import wandb
 # from wandb.keras import WandbCallback
-
-
-# T = 10     T = 20
-# M = 8      M = 8
-# F = 1024   F = 510
-# Overlap - yes
-
-# n_saples = 512
-# hop = 160
-# Overlap = 60%
-
-# T(n frames) = 20
-# F(n freqs) = 257
-# M = 8
-
-# γ = 10
-# Q = 2 × [360/γ] = 72
-
-# CNN   -> 4 × 1 ; 4
-# CNN   -> 3 × 3 ; 16
-# CNN   -> 3 × 3 ; 32
-# Dense -> 72
-
 
 def locnet_cnn (input_shape=(8,257,1), output_size=72,
     filters=[4,16,32], kernels=[[4,1], [3,3], [3,3]],
@@ -63,7 +41,7 @@ def locnet_cnn (input_shape=(8,257,1), output_size=72,
         padding="valid")(dropout2)
     dropout3 = Dropout(drop)(conv3)
     flatten = Flatten(name="Flatten")(dropout3)
-    outputs = Dense(output_size, activation="sigmoid", name="Output")(flatten)   
+    outputs = Dense(output_size, activation="relu", name="Output")(flatten)   
     cnn = Model(inputs=inputs,outputs=outputs, name="cnn")
     return cnn
 
@@ -77,28 +55,36 @@ def locnet_blstm (locnet_cnn, input_shape=(20, 8, 257), q=72, output_size=36,
     blstm = Bidirectional(LSTM(q, return_sequences=True, dropout=drop),
         merge_mode='ave')(time_dist)
     average = GlobalAveragePooling1D()(blstm)
-    outputs = Dense(output_size, activation="sigmoid", name="Output")(average)   
+    outputs = Dense(output_size, activation="softmax", name="Output")(average)   
     model = Model(inputs=inputs,outputs=outputs)
     return model
 
-# def timedistr():
-#     inputs = tf.keras.Input(shape=(10, 128, 128, 3))
-#     conv_2d_layer = tf.keras.layers.Conv2D(64, (3, 3))
-#     outputs = tf.keras.layers.TimeDistributed(conv_2d_layer)(inputs)
-#     model = Model(inputs=inputs,outputs=outputs)
-#     return model
+def locnet_blstm_ss (locnet_cnn, input_shape=(20, 8, 257), q=36,
+    drop = 0.4):
 
-def encode_angles(angles_list, gamma):
-    n_labels = 360//gamma
-    labels = np.zeros((angles_list.shape[0], n_labels))
+    # TODO: use BLSTMP
+    inputs = Input(shape=input_shape)
+    # creating BLSTM
+    time_dist = TimeDistributed(locnet_cnn)(inputs)
+    loc_net_mask_1 = Bidirectional(LSTM(2*q, return_sequences=True, dropout=drop,
+        activation='sigmoid'), merge_mode='ave',)(time_dist)
+    loc_net_mask_2 = Bidirectional(LSTM(2*q, return_sequences=True, dropout=drop,
+        activation='sigmoid'),merge_mode='ave')(time_dist)   
+    weighted1 = Lambda(weighted_average)([loc_net_mask_1, time_dist])
+    weighted2 = Lambda(weighted_average)([loc_net_mask_2, time_dist])
+    output_1 = Dense(q, activation="softmax", name="Output_1")(weighted1)   
+    output_2 = Dense(q, activation="softmax", name="Output_2")(weighted2)   
+    concat = tf.keras.layers.Concatenate()([output_1, output_2])
+    model = Model(inputs=inputs,outputs=concat)
+    return model
 
-    for i, angles in enumerate(angles_list):
-        for angle in angles:
-            if angle != -1:
-                angle_i = angle // gamma
-                labels[i, angle_i] = 1
-    return labels
-            
+def weighted_average(tensors):
+    w = tensors[0]
+    z = tensors[1]
+
+    return tf.math.divide_no_nan(tf.math.reduce_sum(tf.math.multiply(w, z), axis=1),
+        tf.math.reduce_sum(w, axis=1))
+
 
 def change_out_res(labels, gamma):
     output_size = labels.shape[1] // gamma
@@ -106,13 +92,64 @@ def change_out_res(labels, gamma):
     labels = block_reduce(labels, (1, gamma), np.max)
     return labels, output_size
 
-# def get_phasemap(stft_list):
-#     n_chunks = len(stft_list)
+def encode_angles(angles_list, gamma):
+    n_labels = 360//gamma
+    labels = np.zeros((angles_list.shape[0], n_labels))
 
-#     output_size = labels.shape[1] // gamma
-#     print(output_size)
-#     labels = block_reduce(labels, (1, gamma), np.max)
-#     return labels, output_size
+    for i, angles in enumerate(angles_list):
+        if np.isscalar(angles):
+            angle_i = angle // gamma
+            labels[i, angle_i] = 1
+        else:
+            for angle in angles:
+                if angle != -1:
+                    angle_i = angle // gamma
+                    labels[i, angle_i] = 1
+    return labels
+
+def soft_encode_angles(angles_list, gamma):
+    n_labels = 360//gamma
+    labels = np.zeros((angles_list.shape[0], n_labels))
+
+    anlge_prob =  np.zeros(n_labels)
+    # phi_1 = 4//gamma
+    # phi_2 = 8//gamma
+    phi_1 = 1
+    phi_2 = 2
+    for i in range(1, phi_1+1):
+        anlge_prob[i] = .2
+        anlge_prob[-i] = .2
+    for i in range(phi_1+1, phi_2+1):
+        anlge_prob[i] = .1
+        anlge_prob[-i] = .1
+    anlge_prob[0] = .4
+
+    for i, angles in enumerate(angles_list):
+        if np.isscalar(angles):
+            angles = [angles]
+        for angle in angles:
+            if angle != -1:
+                angle_i = angle // gamma
+                labels[i] += np.roll(anlge_prob, angle_i)
+        labels[i][labels[i]>=1] = 1
+    return labels
+
+def soft_encode_2_angles(angles_list, gamma):
+    n_labels = 360//gamma
+    labels = np.zeros((angles_list.shape[0], n_labels*2))
+    labels[:,:n_labels] = soft_encode_angles(angles_list[:,0], gamma)
+    labels[:,n_labels:] = soft_encode_angles(angles_list[:,1], gamma)
+    return labels       
+
+
+def angle_acc(y_true, y_pred):
+    mse = tf.keras.metrics.mean_squared_error
+    true_1, true_2 =  tf.split(y_true, num_or_size_splits=2, axis=1)
+    pred_1, pred_2 =  tf.split(y_pred, num_or_size_splits=2, axis=1)
+    acc_1 = tf.math.add(mse(true_1, pred_1), mse(true_2, pred_2))
+    acc_2 = tf.math.add(mse(true_1, pred_2), mse(true_2, pred_1))
+    acc = tf.math.minimum(acc_1, acc_2)
+    return acc
 
 if __name__ == "__main__":
 
@@ -127,52 +164,33 @@ if __name__ == "__main__":
     with open(args.config_file) as f:
         params = json.load(f)
 
-    cnn = locnet_cnn()
-    blstm = locnet_blstm(cnn)
+    # Defining inputs and labels
+    gamma = 10
+    q = 360//gamma
+    print("q is ", q)
+    cnn = locnet_cnn(output_size=2*q)
+    blstm = locnet_blstm_ss(cnn, q=q)
     cnn.summary()
     blstm.summary()
     # graph = plot_model(cnn, to_file='img/locnet_cnn.png', 
     #     show_shapes=True, show_dtype=True )
-    # graph = plot_model(blstm, to_file='img/locnet_blstm.png', 
-    #     show_shapes=True, show_dtype=True )
+    graph = plot_model(blstm, to_file='img/locnet_blstm_ss.png', 
+        show_shapes=True, show_dtype=True )
 
-
-    # custom_loss = earth_mover_distance()
+    custom_loss = pit_cce()
+    # custom_loss = earth_mover_distance(2)
     # custom_loss = tf.keras.losses.BinaryCrossentropy()
-    custom_loss = tf.keras.losses.CategoricalCrossentropy()
+    # custom_loss = tf.keras.losses.CategoricalCrossentropy()
 
     blstm.compile(optimizer =tf.keras.optimizers.Adam(),
                 loss = custom_loss,
-                metrics=['accuracy'])
+                metrics=[angle_acc])
 
-    blstm.save("data/matrix_voice/models/blstm.h5", )
-    print("Saved model to disk")
-    # Defining inputs and labels
-    gamma = 10
-
-    pmaps = np.load('data/matrix_voice/pmap_1_src_clean_100.npy')
-    stft_data = np.load('data/matrix_voice/stft_data_1_src_clean_100.npy')
+    pmaps = np.load('data/matrix_voice/test/pmap_2_src_clean.npy')
+    stft_data = np.load('data/matrix_voice/test/stft_data_2_src_clean.npy')
     print(pmaps.shape)
     print(stft_data.shape)
-    for i in range (200,800,100):
-        new_pmaps = np.load(f'data/matrix_voice/pmap_1_src_clean_{i}.npy')
-        new_stft = np.load(f'data/matrix_voice/stft_data_1_src_clean_{i}.npy')
-        pmaps = np.concatenate((pmaps, new_pmaps))
-        stft_data = np.concatenate((stft_data, new_stft))
-        print(f'concatenated 1_src {i}')
-    # for i in range (100,600,100):
-    #     new_pmaps = np.load(f'data/matrix_voice/pmap_1_src_noise_{i}.npy')
-    #     new_stft = np.load(f'data/matrix_voice/stft_data_1_src_noise_{i}.npy')
-    #     pmaps = np.concatenate((pmaps, new_pmaps))
-    #     stft_data = np.concatenate((stft_data, new_stft))
-    #     print(f'concatenated 1_src {i}')
-    # for i in range (100,700,100):
-    #     new_pmaps = np.load(f'data/matrix_voice/pmap_2_src_clean_{i}.npy')
-    #     new_stft = np.load(f'data/matrix_voice/stft_data_2_src_clean_{i}.npy')
-    #     pmaps = np.concatenate((pmaps, new_pmaps))
-    #     stft_data = np.concatenate((stft_data, new_stft))
-    #     print(f'concatenated 2_src {i}')
-    print(pmaps.shape)
+
     print(stft_data.shape)
 
     # ones_src_df = df.loc[df['number of speakers'] == 1]
@@ -192,11 +210,12 @@ if __name__ == "__main__":
 
     angles = stft_data[:, -2:]
     # angles = angles_df.to_numpy(dtype=np.int)
-    train_labels = encode_angles(angles, gamma)
-    print(train_labels[:5])
+    # train_labels = encode_angles(angles, gamma)
+    train_labels = soft_encode_2_angles(angles, gamma)
+    print(train_labels[:20])
 
 
-    blstm.save("data/matrix_voice/models/blstm.h5", overwrite=True)
+    blstm.save("data/matrix_voice/models/blstm_semd.h5", overwrite=True)
     print("Saved model to disk")
 
 

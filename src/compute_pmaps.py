@@ -44,26 +44,26 @@ def compute_stft(params):
         sim_path  = f"simulations/{params['mic_array']['name']}/test/"
         data_path = f"data/{params['mic_array']['name']}/test/"
     else:
-        sim_path  = f"simulations/{params['mic_array']['name']}/"
+        sim_path  = f"simulations/{params['mic_array']['name']}/dataset/"
         data_path = f"data/{params['mic_array']['name']}/dataset/"
 
     data = pd.read_csv(f'{data_path}data.csv')
 
-    stfts = []
+    phasemaps = []
     stft_data = []
     for _, row in data.iterrows():
         name = row[0]
         ftype = row[1]
 
-        # last_i = -1
-        # for i in range(50):
-        #     if os.path.isfile(f'{data_path}stft_data_{name}_{ftype}_{i}.npy'):
-        #         last_i = i*100
+        last_i = -1
+        for i in range(50):
+            if os.path.isfile(f'{data_path}stft_data_{name}_{ftype}_{i}.npy'):
+                last_i = i*100
 
         simulation_df = pd.read_csv(f'{sim_path}{name}/positions_{ftype}.csv')
         for id in simulation_df['id']:
-            # if i < last_i:
-            #     continue
+            if i < last_i:
+                continue
             sim = simulation_df.iloc[id-1]
             n_speakers = sim['number of speakers']
             n_noises = sim['number of noises']
@@ -89,33 +89,29 @@ def compute_stft(params):
 
                 stft_data.append(np.array([i, n_speakers, n_noises, angles[0],
                     angles[1]]))
-                stfts.append(chunk)
+                p_map = np.angle(chunk)/(2*np.pi) + .5
+                phasemaps.append(p_map)
             
             if id % 100 == 0:
                 print('saving file!')
-                stft_data_file = f'{data_path}stft_data_{name}_{ftype}_{id}.npy'
-                if not os.path.isfile(stft_data_file):
-                    stft_data_np = np.array(stft_data)
-                    np.save(stft_data_file, stft_data_np)
-
-                stft_file = f'{data_path}stft_{name}_{ftype}_{id}.npy'
-                if not os.path.isfile(stft_file):
-                    stft_np = np.array(stfts)
-                    np.save(stft_file, stft_np)
-                stfts = []
+                stft_file = f'{data_path}stft_data_{name}_{ftype}_{id}.npy'
+                pmap_file = f'{data_path}pmap_{name}_{ftype}_{id}.npy'
+                stft_data_np = np.array(stft_data)
+                p_map_np = np.array(phasemaps)
+                np.save(stft_file, stft_data_np)
+                np.save(pmap_file, p_map_np)
+                phasemaps = []
                 stft_data = []
 
         if params['test']:
             print('saving file!')
-            stft_data_file = f'{data_path}stft_data_{name}_{ftype}.npy'
-            if not os.path.isfile(stft_data_file):
-                stft_data_np = np.array(stft_data)
-                np.save(stft_data_file, stft_data_np)
-            stft_file = f'{data_path}stft_{name}_{ftype}.npy'
-            if not os.path.isfile(stft_file):
-                stft_np = np.array(stfts)
-                np.save(stft_file, stft_np)
-            stfts = []
+            stft_file = f'{data_path}stft_data_{name}_{ftype}.npy'
+            pmap_file = f'{data_path}pmap_{name}_{ftype}.npy'
+            stft_data_np = np.array(stft_data)
+            p_map_np = np.array(phasemaps)
+            np.save(stft_file, stft_data_np)
+            np.save(pmap_file, p_map_np)
+            phasemaps = []
             stft_data = []        
     return
 

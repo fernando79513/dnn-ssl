@@ -9,9 +9,6 @@ from tensorflow.keras import backend as K
 from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.losses import categorical_crossentropy
 
-GROUND_DISTANCE_FILE = os.path.dirname(__file__) / Path('../ground_distance.npy')
-
-
 def earth_mover_distance(
         **kwargs
 ) -> Callable:
@@ -22,9 +19,55 @@ def earth_mover_distance(
             y_true: K.placeholder,
             y_pred: K.placeholder
     ) -> K.placeholder:
-        return tf.reduce_mean(tf.square(tf.cumsum(y_true, axis=-1) - tf.cumsum(y_pred, axis=-1)), axis=-1)
+        return tf.reduce_sum(tf.square(tf.cumsum(y_true, axis=-1) - tf.cumsum(y_pred, axis=-1)), axis=-1)
 
     return _earth_mover_distance
+
+def pit_earth_mover_distance(
+        **kwargs
+) -> Callable:
+    """
+    Wrapper for earth_mover distance for unified interface with self-guided earth mover distance loss.
+    """
+    def _pit_earth_mover_distance(
+            y_true: K.placeholder,
+            y_pred: K.placeholder
+    ) -> K.placeholder:
+        def emd(true, pred):
+            return tf.reduce_sum(tf.square(tf.cumsum(true, axis=-1) - tf.cumsum(pred, axis=-1)), axis=-1)
+        true_1, true_2 =  tf.split(y_true, num_or_size_splits=2, axis=1)
+        pred_1, pred_2 =  tf.split(y_pred, num_or_size_splits=2, axis=1)
+        emd_1 = tf.math.add(emd(true_1, pred_1), emd(true_2, pred_2))
+        emd_2 = tf.math.add(emd(true_1, pred_2), emd(true_2, pred_1))
+        pit_emd = tf.math.minimum(emd_1, emd_2)
+        import pdb; pdb.set_trace()
+        return pit_emd
+
+    return _pit_earth_mover_distance
+
+def pit_cce(
+        **kwargs
+) -> Callable:
+    """
+    Wrapper for earth_mover distance for unified interface with self-guided earth mover distance loss.
+    """
+    def _pit_earth_mover_distance(
+            y_true: K.placeholder,
+            y_pred: K.placeholder
+    ) -> K.placeholder:
+
+        true_1, true_2 =  tf.split(y_true, num_or_size_splits=2, axis=1)
+        pred_1, pred_2 =  tf.split(y_pred, num_or_size_splits=2, axis=1)
+        cce_1 = tf.math.add(categorical_crossentropy(true_1, pred_1),
+            categorical_crossentropy(true_2, pred_2))
+        cce_2 = tf.math.add(categorical_crossentropy(true_1, pred_2),
+            categorical_crossentropy(true_2, pred_1))
+        pit_cce = tf.math.minimum(cce_1, cce_2)
+        import pdb; pdb.set_trace()
+
+        return pit_cce
+
+    return _pit_earth_mover_distance
 
 
 def approximate_earth_mover_distance(
