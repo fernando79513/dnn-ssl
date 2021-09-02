@@ -1,3 +1,4 @@
+from os import access
 from numpy.lib.function_base import angle, average
 import pandas as pd 
 import numpy as np
@@ -20,14 +21,38 @@ from skimage.measure import block_reduce
 from tensorflow.python.keras.backend import dropout, sigmoid
 from tensorflow.python.ops.gen_array_ops import reshape
 
-from src.utils.emd import earth_mover_distance, pit_earth_mover_distance, pit_cce
+from src.utils.emd import (earth_mover_distance, pit_earth_mover_distance,
+    pit_cce, roll_earth_mover_distance)
 
-# import wandb
-# from wandb.keras import WandbCallback
+import wandb
+from wandb.keras import WandbCallback
+
+
+# T = 10     T = 20
+# M = 8      M = 8
+# F = 1024   F = 510
+# Overlap - yes
+
+# n_saples = 512
+# hop = 160
+# Overlap = 60%
+
+# T(n frames) = 20
+# F(n freqs) = 257
+# M = 8
+
+# γ = 10
+# Q = 2 × [360/γ] = 72
+
+# CNN   -> 4 × 1 ; 4
+# CNN   -> 3 × 3 ; 16
+# CNN   -> 3 × 3 ; 32
+# Dense -> 72
+
 
 def locnet_cnn (input_shape=(8,257,1), output_size=72,
     filters=[4,16,32], kernels=[[4,1], [3,3], [3,3]],
-    drop = 0.5):
+    drop = 0.2, drop_fc = 0.5):
 
     # I have to padd layers only verticaly
     inputs = Input(shape=input_shape)
@@ -42,34 +67,34 @@ def locnet_cnn (input_shape=(8,257,1), output_size=72,
     dropout3 = Dropout(drop)(conv3)
     flatten = Flatten(name="Flatten")(dropout3)
     outputs = Dense(output_size, activation="relu", name="Output")(flatten)   
+    dropout4 = Dropout(drop_fc)(outputs)
     cnn = Model(inputs=inputs,outputs=outputs, name="cnn")
     return cnn
 
-def locnet_blstm (locnet_cnn, input_shape=(20, 8, 257), q=72, output_size=36,
+def locnet_blstm (locnet_cnn, input_shape=(20, 8, 257), q=36,
     drop = 0.4):
 
     # TODO: use BLSTMP
     inputs = Input(shape=input_shape)
     # creating BLSTM
     time_dist = TimeDistributed(locnet_cnn)(inputs)
-    blstm = Bidirectional(LSTM(q, return_sequences=True, dropout=drop),
+    blstm = Bidirectional(LSTM(2*q, return_sequences=True, dropout=drop),
         merge_mode='ave')(time_dist)
     average = GlobalAveragePooling1D()(blstm)
-    outputs = Dense(output_size, activation="softmax", name="Output")(average)   
+    outputs = Dense(q, activation="softmax", name="Output")(average)   
     model = Model(inputs=inputs,outputs=outputs)
     return model
 
-def locnet_blstm_ss (locnet_cnn, input_shape=(20, 8, 257), q=36,
-    drop = 0.4):
+def locnet_blstm_ss (locnet_cnn, input_shape=(20, 8, 257), q=36, drop = 0.4):
 
     # TODO: use BLSTMP
     inputs = Input(shape=input_shape)
     # creating BLSTM
     time_dist = TimeDistributed(locnet_cnn)(inputs)
-    loc_net_mask_1 = Bidirectional(LSTM(2*q, return_sequences=True, dropout=drop,
-        activation='sigmoid'), merge_mode='ave',)(time_dist)
-    loc_net_mask_2 = Bidirectional(LSTM(2*q, return_sequences=True, dropout=drop,
-        activation='sigmoid'),merge_mode='ave')(time_dist)   
+    loc_net_mask_1 = Bidirectional(LSTM(q*2, return_sequences=True, dropout=drop,
+        recurrent_dropout=drop/2, activation='sigmoid'), merge_mode='ave',)(time_dist)
+    loc_net_mask_2 = Bidirectional(LSTM(q*2, return_sequences=True, dropout=drop,
+        recurrent_dropout=drop/2, activation='sigmoid'),merge_mode='ave')(time_dist)     
     weighted1 = Lambda(weighted_average)([loc_net_mask_1, time_dist])
     weighted2 = Lambda(weighted_average)([loc_net_mask_2, time_dist])
     output_1 = Dense(q, activation="softmax", name="Output_1")(weighted1)   
@@ -81,16 +106,8 @@ def locnet_blstm_ss (locnet_cnn, input_shape=(20, 8, 257), q=36,
 def weighted_average(tensors):
     w = tensors[0]
     z = tensors[1]
-
     return tf.math.divide_no_nan(tf.math.reduce_sum(tf.math.multiply(w, z), axis=1),
         tf.math.reduce_sum(w, axis=1))
-
-
-def change_out_res(labels, gamma):
-    output_size = labels.shape[1] // gamma
-    print(output_size)
-    labels = block_reduce(labels, (1, gamma), np.max)
-    return labels, output_size
 
 def encode_angles(angles_list, gamma):
     n_labels = 360//gamma
@@ -114,14 +131,14 @@ def soft_encode_angles(angles_list, gamma):
     anlge_prob =  np.zeros(n_labels)
     # phi_1 = 4//gamma
     # phi_2 = 8//gamma
-    phi_1 = 1
-    phi_2 = 2
+    phi_1 = 3
+    phi_2 = 6
     for i in range(1, phi_1+1):
-        anlge_prob[i] = .2
-        anlge_prob[-i] = .2
+        anlge_prob[i] = .06666
+        anlge_prob[-i] = .06666
     for i in range(phi_1+1, phi_2+1):
-        anlge_prob[i] = .1
-        anlge_prob[-i] = .1
+        anlge_prob[i] = .03333
+        anlge_prob[-i] = .03333
     anlge_prob[0] = .4
 
     for i, angles in enumerate(angles_list):
@@ -131,25 +148,60 @@ def soft_encode_angles(angles_list, gamma):
             if angle != -1:
                 angle_i = angle // gamma
                 labels[i] += np.roll(anlge_prob, angle_i)
+            else:
+                labels[i] += np.full(labels[i].shape, gamma/360)
         labels[i][labels[i]>=1] = 1
     return labels
 
 def soft_encode_2_angles(angles_list, gamma):
     n_labels = 360//gamma
     labels = np.zeros((angles_list.shape[0], n_labels*2))
+    for i, angles in enumerate(angles_list):
+        if angles[0] > angles[1]:
+            angles_list[i] = [angles[1], angles[0]]
     labels[:,:n_labels] = soft_encode_angles(angles_list[:,0], gamma)
     labels[:,n_labels:] = soft_encode_angles(angles_list[:,1], gamma)
-    return labels       
+    return labels
 
+            
 
-def angle_acc(y_true, y_pred):
-    mse = tf.keras.metrics.mean_squared_error
+def change_out_res(labels, gamma):
+    output_size = labels.shape[1] // gamma
+    print(output_size)
+    labels = block_reduce(labels, (1, gamma), np.max)
+    return labels, output_size
+
+def center_roll_acc(t_p):
+    tr, pr =  tf.split(t_p, num_or_size_splits=2, axis=0)
+    shift = 179 - tf.argmax(tr)
+    tr = tf.roll(tr,shift,axis=-1)
+    pr = tf.roll(pr,shift,axis=-1)
+    acc = tf.math.abs(tf.math.subtract(tf.argmax(tr),tf.argmax(pr)))
+    return acc
+
+def ape(y_true, y_pred):
+
     true_1, true_2 =  tf.split(y_true, num_or_size_splits=2, axis=1)
     pred_1, pred_2 =  tf.split(y_pred, num_or_size_splits=2, axis=1)
-    acc_1 = tf.math.add(mse(true_1, pred_1), mse(true_2, pred_2))
-    acc_2 = tf.math.add(mse(true_1, pred_2), mse(true_2, pred_1))
-    acc = tf.math.minimum(acc_1, acc_2)
+    # true_angle_1 = tf.math.argmax(true_1, axis=-1)
+    # true_angle_2 = tf.math.argmax(true_2,  axis=-1)
+    # pred_angle_1 = tf.math.argmax(pred_1, axis=-1)
+    # pred_angle_2 = tf.math.argmax(pred_2, axis=-1)
+
+    acc_1_1 = tf.map_fn(fn=center_roll_acc, 
+        elems=tf.concat((true_1,pred_1), axis=-1), dtype='int64')
+    acc_2_2 = tf.map_fn(fn=center_roll_acc, 
+        elems=tf.concat((true_2,pred_2), axis=-1), dtype='int64')
+    # acc_1_2 = tf.map_fn(fn=center_roll_acc, 
+    #     elems=tf.concat((true_1,pred_2), axis=-1), dtype='int64')
+    # acc_2_1 = tf.map_fn(fn=center_roll_acc, 
+    #     elems=tf.concat((true_2,pred_1), axis=-1), dtype='int64')
+
+    # acc = tf.math.minimum(acc_1_1+acc_2_2, acc_1_2+acc_2_1)
+    acc = acc_1_1+acc_2_2
+    # return tf.cast(acc, dtype=(float))
     return acc
+
 
 if __name__ == "__main__":
 
@@ -164,18 +216,32 @@ if __name__ == "__main__":
     with open(args.config_file) as f:
         params = json.load(f)
 
+    # wandb.init(mode="disabled")
+    wandb.init(project='dnn-ssl-src', entity='fernando79513')
+    config = wandb.config
+    config.drop_cnn = 0.2
+    config.drop_fc = 0.5
+    config.drop_lstm = 0.4
+    
+
     # Defining inputs and labels
-    gamma = 10
+    gamma = 1
     q = 360//gamma
     print("q is ", q)
-    cnn = locnet_cnn(output_size=2*q)
-    blstm = locnet_blstm_ss(cnn, q=q)
+
+    cnn = locnet_cnn(output_size=2*q, drop=config.drop_cnn, drop_fc=config.drop_fc)
+    blstm = locnet_blstm_ss(cnn, q=q, drop=config.drop_lstm)
+
     cnn.summary()
     blstm.summary()
     # graph = plot_model(cnn, to_file='img/locnet_cnn.png', 
     #     show_shapes=True, show_dtype=True )
-    graph = plot_model(blstm, to_file='img/locnet_blstm_ss.png', 
-        show_shapes=True, show_dtype=True )
+    # graph = plot_model(blstm, to_file='img/locnet_blstm_ss.png', 
+    #     show_shapes=True, show_dtype=True )
+
+    custom_loss = roll_earth_mover_distance()
+    # custom_loss = pit_earth_mover_distance()
+    # custom_loss = pit_cce()
 
     # custom_loss = pit_cce()
     # custom_loss = earth_mover_distance(2)
@@ -183,8 +249,10 @@ if __name__ == "__main__":
     # custom_loss = tf.keras.losses.CategoricalCrossentropy()
 
     blstm.compile(optimizer =tf.keras.optimizers.Adam(),
-                loss = 'mse',
-                metrics='mse')
+                loss = custom_loss,
+                metrics=[ape])
+
+
 
     pmaps = np.load('data/matrix_voice/test/pmap_2_src_clean.npy')
     stft_data = np.load('data/matrix_voice/test/stft_data_2_src_clean.npy')
@@ -212,6 +280,7 @@ if __name__ == "__main__":
     # angles = angles_df.to_numpy(dtype=np.int)
     # train_labels = encode_angles(angles, gamma)
     train_labels = soft_encode_2_angles(angles, gamma)
+    print(train_labels.shape)
     print(train_labels[:20])
 
 
@@ -220,28 +289,29 @@ if __name__ == "__main__":
 
 
     # plt.show()
-    earlyStopping = EarlyStopping(monitor="val_accuracy", 
-                                patience=10,
+    earlyStopping = EarlyStopping(monitor="val_loss", 
+                                patience=15,
                                 verbose=1)
 
     checkpoint_filepath = 'data/matrix_voice/checkpoint/'
     checkpoint = tf.keras.callbacks.ModelCheckpoint(
         filepath=checkpoint_filepath,
         save_weights_only=True,
-        monitor='val_accuracy',
-        mode='max',
+        monitor='val_loss',
+        mode='min',
         save_best_only=True,
         verbose=1)
+    # blstm.load_weights(checkpoint_filepath)
 
     history = History()
 
     history = blstm.fit(pmaps, 
                         train_labels, 
-                        batch_size=128,
+                        batch_size=64,
                         epochs=100,
                         shuffle=True, 
-                        callbacks=[earlyStopping, checkpoint],
-                        # callbacks=[WandbCallback(), earlyStopping],
+                        # callbacks=[earlyStopping, checkpoint],
+                        callbacks=[WandbCallback(data_type="graph"), earlyStopping, checkpoint],
                         validation_split=.1
                         )
 

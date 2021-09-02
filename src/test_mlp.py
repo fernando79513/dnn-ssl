@@ -17,7 +17,7 @@ from sklearn.metrics import confusion_matrix,classification_report
 from skimage.measure import block_reduce
 
 from tensorflow.python.keras.layers.core import Flatten
-from src.utils.emd import earth_mover_distance
+from src.utils.emd import earth_mover_distance, pit_cce
 
 import wandb
 from wandb.keras import WandbCallback
@@ -58,7 +58,8 @@ if __name__ == "__main__":
         params = json.load(f)
     mic_pairs = params['gcc_phat']['mic_pairs']
 
-    model = keras.models.load_model('data/model.h5', custom_objects={"_earth_mover_distance": earth_mover_distance})
+    model = keras.models.load_model('data/models/blstm_ss_semd.h5', 
+        custom_objects={"_pit_cce": pit_cce})
     print('model loaded')
     
     gcc_df = pd.read_feather('data/matrix_voice/test/gcc.ftr')

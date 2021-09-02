@@ -13,31 +13,6 @@ from src.utils import logs
 # from src.utils import csv_utils
 from src.utils import phase_map
 
-def get_sim_info(df):
-
-    wav_path = 'wav/cmu_arctic/'
-    n_speakers =  df['number of speakers']
-    if 0 <= n_speakers <= 2:
-        angles = [-1, -1]
-        lengths = [-1, -1]
-        for i in range(n_speakers):
-            angle = np.fromstring(df[f'speaker position {i}'][1:-1],
-                dtype=int, sep=' ')[0]
-            angles[i] = angle
-
-            audio_length =0
-            name = df[f'speaker name {i}']
-            audios = ast.literal_eval(df[f'speaker audios {i}'])
-            for audio in audios:
-                wav_file = f'{wav_path}{name}/arctic_{audio}.wav'
-                wav = wavfile.read(wav_file)[1]
-                audio_length += len(wav)
-            lengths[i] = audio_length
-    else:
-        print("Wrong number of speakers")
-    return angles, lengths
-
-
 def prune_dataset(params):
 
     # if params['test']:
@@ -52,26 +27,36 @@ def prune_dataset(params):
 
     data = pd.read_csv(f'{data_path}data.csv')
 
-    phasemaps = []
-    stft_data = []
     for _, row in data.iterrows():
         name = row[0]
         ftype = row[1]
 
-        for id in range(0,4000,100):
-            stft_file = f'{data_path}stft_data_{name}_{ftype}_{id}.npy'
+        for id in range(100,5000,100):
+            stft_data_file = f'{data_path}stft_data_{name}_{ftype}_{id}.npy'
             pmap_file = f'{data_path}pmap_{name}_{ftype}_{id}.npy'
 
-            if not os.path.isfile(stft_file):
+            if not os.path.isfile(stft_data_file):
                 print('no file')
                 continue
 
-            np.load(stft_file, pmap_file)
+            stft_data = np.load(stft_data_file)
+            pmaps = np.load(pmap_file)
 
-            print(stft_file.shape)
-            print(pmap_file.shape)
-            return
-            
+            print(stft_data.shape)
+            print(pmaps.shape)
+
+            stft_data_slim = stft_data[::10]
+            pmaps_slim = pmaps[::10] 
+
+            print(stft_data_slim.shape)
+            print(pmaps_slim.shape)
+
+            print('saving file!')
+            stft_slim_file = f'{shuff_path}stft_data_{name}_{ftype}_{id}.npy'
+            pmap_slim_file = f'{shuff_path}pmap_{name}_{ftype}_{id}.npy'
+            np.save(stft_slim_file, stft_data_slim)
+            np.save(pmap_slim_file, pmaps_slim)
+
             
         #     if id % 100 == 0:
         #         print('saving file!')
@@ -95,6 +80,50 @@ def prune_dataset(params):
         #     phasemaps = []
         #     stft_data = []        
     return
+
+def prune_dataset(params):
+    
+    data_path = f"data/{params['mic_array']['name']}/dataset/"
+    shuff_path  = f"data/{params['mic_array']['name']}/dev/"
+
+    data = pd.read_csv(f'{data_path}data.csv')
+
+    for _, row in data.iterrows():
+        name = row[0]
+        ftype = row[1]
+
+
+        pmap_list = []
+        stft_data_list = []
+
+        for id in range(100,5000,100):
+            stft_data_file = f'{data_path}stft_data_{name}_{ftype}_{id}.npy'
+            pmap_file = f'{data_path}pmap_{name}_{ftype}_{id}.npy'
+
+            if not os.path.isfile(stft_data_file):
+                print('no file')
+                continue
+
+            stft_data = np.load(stft_data_file)
+            pmaps = np.load(pmap_file)
+
+            print(stft_data.shape)
+            print(pmaps.shape)
+
+            stft_data_slim = stft_data[::10]
+            pmaps_slim = pmaps[::10] 
+
+            pmap_list.append()
+            stft_data_list.append()
+
+            print(stft_data_slim.shape)
+            print(pmaps_slim.shape)
+
+            print('saving file!')
+            stft_slim_file = f'{shuff_path}stft_data_{name}_{ftype}_{id}.npy'
+            pmap_slim_file = f'{shuff_path}pmap_{name}_{ftype}_{id}.npy'
+            np.save(stft_slim_file, stft_data_slim)
+            np.save(pmap_slim_file, pmaps_slim)
 
 if __name__ == '__main__':
 
@@ -122,7 +151,7 @@ if __name__ == '__main__':
         params['test'] = args.test
 
 
-    prune_dataset(params)
+    shuffle_dataset(params)
 
 
     # simulate_speech(params)

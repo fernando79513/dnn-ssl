@@ -23,6 +23,42 @@ def earth_mover_distance(
 
     return _earth_mover_distance
 
+def roll_earth_mover_distance(
+        **kwargs
+) -> Callable:
+    """
+    Wrapper for earth_mover distance for unified interface with self-guided earth mover distance loss.
+    """
+    def _roll_earth_mover_distance(
+            y_true: K.placeholder,
+            y_pred: K.placeholder
+    ) -> K.placeholder:
+
+        def emd(true, pred):
+            emd_t = tf.reduce_sum(tf.square(tf.cumsum(
+                true, axis=-1) - tf.cumsum(pred, axis=-1)), axis=-1)
+            return emd_t
+        def center_roll(t_p):
+            t, p =  tf.split(t_p, num_or_size_splits=2, axis=-1)
+            shift = 179 - tf.argmax(t)
+            t = tf.roll(t,shift,axis=-1)
+            p = tf.roll(p,shift,axis=-1)
+            loss = emd(t,p)
+            return loss
+
+        true_1, true_2 =  tf.split(y_true, num_or_size_splits=2, axis=1)
+        pred_1, pred_2 =  tf.split(y_pred, num_or_size_splits=2, axis=1)
+        emd_1_1 = tf.map_fn(fn=center_roll, 
+            elems=tf.concat((true_1,pred_1), axis=-1))
+        emd_2_2 = tf.map_fn(fn=center_roll, 
+            elems=tf.concat((true_2,pred_2), axis=-1))
+
+        roll_emd = emd_1_1 + emd_2_2
+
+        return roll_emd
+
+    return _roll_earth_mover_distance
+
 def pit_earth_mover_distance(
         **kwargs
 ) -> Callable:
@@ -33,14 +69,34 @@ def pit_earth_mover_distance(
             y_true: K.placeholder,
             y_pred: K.placeholder
     ) -> K.placeholder:
+
         def emd(true, pred):
-            return tf.reduce_sum(tf.square(tf.cumsum(true, axis=-1) - tf.cumsum(pred, axis=-1)), axis=-1)
+            emd_t = tf.reduce_sum(tf.square(tf.cumsum(
+                true, axis=-1) - tf.cumsum(pred, axis=-1)), axis=-1)
+            return emd_t
+        def center_roll(t_p):
+            t, p =  tf.split(t_p, num_or_size_splits=2, axis=-1)
+            shift = 179 - tf.argmax(t)
+            t = tf.roll(t,shift,axis=-1)
+            p = tf.roll(p,shift,axis=-1)
+            loss = emd(t,p)
+            return loss
+
         true_1, true_2 =  tf.split(y_true, num_or_size_splits=2, axis=1)
         pred_1, pred_2 =  tf.split(y_pred, num_or_size_splits=2, axis=1)
-        emd_1 = tf.math.add(emd(true_1, pred_1), emd(true_2, pred_2))
-        emd_2 = tf.math.add(emd(true_1, pred_2), emd(true_2, pred_1))
-        pit_emd = tf.math.minimum(emd_1, emd_2)
-        import pdb; pdb.set_trace()
+        emd_1_1 = tf.map_fn(fn=center_roll, 
+            elems=tf.concat((true_1,pred_1), axis=-1))
+        emd_1_2 = tf.map_fn(fn=center_roll, 
+            elems=tf.concat((true_1,pred_2), axis=-1))
+        emd_2_1 = tf.map_fn(fn=center_roll, 
+            elems=tf.concat((true_2,pred_1), axis=-1))
+        emd_2_2 = tf.map_fn(fn=center_roll, 
+            elems=tf.concat((true_2,pred_2), axis=-1))
+
+        # cce_1 = tf.math.add(emd(true_1, pred_1), emd(true_2, pred_2))
+        # cce_2 = tf.math.add(emd(true_1, pred_2), emd(true_2, pred_1))
+        pit_emd = tf.math.minimum(emd_1_1 + emd_2_2, emd_1_2 + emd_2_1)
+
         return pit_emd
 
     return _pit_earth_mover_distance
@@ -51,7 +107,7 @@ def pit_cce(
     """
     Wrapper for earth_mover distance for unified interface with self-guided earth mover distance loss.
     """
-    def _pit_earth_mover_distance(
+    def _pit_cce(
             y_true: K.placeholder,
             y_pred: K.placeholder
     ) -> K.placeholder:
@@ -63,11 +119,10 @@ def pit_cce(
         cce_2 = tf.math.add(categorical_crossentropy(true_1, pred_2),
             categorical_crossentropy(true_2, pred_1))
         pit_cce = tf.math.minimum(cce_1, cce_2)
-        import pdb; pdb.set_trace()
 
         return pit_cce
 
-    return _pit_earth_mover_distance
+    return _pit_cce
 
 
 def approximate_earth_mover_distance(
@@ -254,6 +309,3 @@ def _calculate_self_guided_loss(
         )
     cost_vectors = tf.stack(cost_vectors)
     return K.sum(K.square(y_pred) * cost_vectors, axis=1)
-
-
-
