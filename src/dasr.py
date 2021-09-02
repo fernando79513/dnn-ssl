@@ -57,8 +57,29 @@ def get_angle_features(d, y):
     a_pred = np.empty((N, F, T))
     for n in range(N):
         for t, time in enumerate(T_ARRAY):
-            a_pred[i,:,j] = np.abs(d_1[i].conj().T*stft_mc[i+1,:,j])
-            a_2[i,:,j] = np.abs(d_2[i].conj().T*stft_mc[i+1,:,j])
+            a_pred[n,:,t] = np.abs(d[n].conj().T*y[n,:,t])
+
+    #  TODO: check first paper
+    for n in range(N):
+        for f in range(F):
+            for t in range(T):
+                for s in range(N):
+                    a[n,f,t] = a_pred[n,:,t]
+                    if s == n:
+                        pass
+                    else:
+                        if a_pred[n,f,t] < a_pred[s,f,t]:
+                            a[n,f,t] = 0
+    return a
+
+def get_scm(l, d, y):
+    scm = np.empty((N, F))
+    for n in range(N):
+        for f in range(F):
+            scm[n,f] = (1/np.sum(l[n,f,:]))*np.sum(
+                l[n,f,:]*y[n,f,:]*y[n,f,:]
+            )
+    return scm
 
 if __name__ == "__main__":
 

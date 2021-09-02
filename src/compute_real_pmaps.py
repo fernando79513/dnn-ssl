@@ -40,53 +40,58 @@ def get_sim_info(df):
 
 def compute_stft(params):
 
-    real_wav  = f"real_audio/2_sources/recording_voice_2src_clean_1.wav"
-    data_path = f"data/real/"
+    real_df = pd.read_csv(f"data/real/data_real.csv")
+    data_path =f"data/real/"
 
     phasemaps = []
     stft_data = []
 
-    wav = wavfile.read(real_wav)[1]
-    print("processing ", real_wav)
+    for _, row in real_df.iterrows():
+        print(row)
+        n_src = row['n src']
+        if n_src == '1_src':
+            n = 1
+        elif n_src == '2_src':
+            n = 2
+        ftype = row['type']
+        if ftype == 'clean':
+            n_noise = 0
+        elif ftype == 'noise':
+            n_noise = 1
+        name = row['name']
+        index = row['index']
+        real_wav  = f"real_audio/matrix_voice/{ftype}_{name}_{index:0>4}.wav"
 
-    stft_mc = phase_map.stft(wav[:][:6000000])
-    chunks = []
-    t = linspace(1,10,2000)
-    f_array = linspace(1,800,257)
-    for i, chunk in enumerate(phase_map.split_stft_mc(stft_mc, 20)):
-        # stft_data[id] = [
-        #   0- chunk_i, 
-        #   1- number of speakers, 
-        #   2- number of noises, 
-        #   3- speaker angle 0, 
-        #   4- speaker angle 1
-        #   ]
-        stft_data.append(np.array([i, 2, 0, 30,
-            70]))
-        p_map = np.angle(chunk)/(2*np.pi) + .5
-        phasemaps.append(p_map)
-        chunks.append(chunk)
-        print(i)
-        if (i+1) % 100 == 0:
-            specgram = np.concatenate(chunks, axis=2)
-            # import pdb;pdb.set_trace()
-            plt.pcolormesh(t, f_array, np.abs(specgram[0,:,:]), vmin=-20, vmax=30, shading='gouraud')
-            plt.title('STFT Magnitude')
-            plt.ylabel('Frequency [Hz]')
-            plt.xlabel('Time [sec]')
-            plt.show()
-            chunks = []
+        wav = wavfile.read(real_wav)[1]
+        print("processing ", real_wav)
 
+        stft_mc = phase_map.stft(wav)
+        chunks = []
 
-    # print('saving file!')
-    # stft_file = f'{data_path}stft_data_real.npy'
-    # pmap_file = f'{data_path}pmap_real.npy'
-    # stft_data_np = np.array(stft_data)
-    # p_map_np = np.array(phasemaps)
-    # np.save(stft_file, stft_data_np)
-    # np.save(pmap_file, p_map_np)
-    # phasemaps = []
-    # stft_data = []        
+        for i, chunk in enumerate(phase_map.split_stft_mc(stft_mc, 20)):
+            # stft_data[id] = [
+            #   0- index, 
+            #   1- chunk_i, 
+            #   2- number of speakers, 
+            #   3- number of noises, 
+            #   4- speaker angle 0, 
+            #   5- speaker angle 1
+            #   ]
+            stft_data.append(np.array([index, i, n, n_noise, row['speaker angle 0'],
+                row['speaker angle 1']]))
+            p_map = np.angle(chunk)/(2*np.pi) + .5
+            phasemaps.append(p_map)
+            chunks.append(chunk)
+
+    print('saving file!')
+    pmap_file = f'{data_path}pmap_real.npy'
+    p_map_np = np.array(phasemaps)
+    np.save(pmap_file, p_map_np)
+    stft_file = f'{data_path}stft_data_real.npy'
+    stft_data_np = np.array(stft_data)
+    np.save(stft_file, stft_data_np)
+    phasemaps = []
+    stft_data = []        
     return
 
 if __name__ == '__main__':
@@ -97,9 +102,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Simulation of speeches inside a room')
     parser.add_argument('-c', '--config_file', type=str)
-    parser.add_argument('-s', '--num_speakers', type=int)
-    parser.add_argument('-n', '--num_noises', type=int)
-    parser.add_argument('-t', '--test', type=bool, nargs='?', const=True)
+
     args = parser.parse_args()
 
     if args.config_file == None:
@@ -107,16 +110,8 @@ if __name__ == '__main__':
     with open(args.config_file) as f:
         params = json.load(f)
 
-    if args.num_speakers != None:
-        params['speakers']['count'] = args.num_speakers
-    if args.num_noises != None:
-        params['noises']['count'] = args.num_noises
-    if args.test != None:
-        params['test'] = args.test
-
 
     compute_stft(params)
-
 
     # simulate_speech(params)
     print('DONE')

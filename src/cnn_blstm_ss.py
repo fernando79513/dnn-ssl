@@ -177,14 +177,14 @@ if __name__ == "__main__":
     graph = plot_model(blstm, to_file='img/locnet_blstm_ss.png', 
         show_shapes=True, show_dtype=True )
 
-    custom_loss = pit_cce()
+    # custom_loss = pit_cce()
     # custom_loss = earth_mover_distance(2)
     # custom_loss = tf.keras.losses.BinaryCrossentropy()
     # custom_loss = tf.keras.losses.CategoricalCrossentropy()
 
     blstm.compile(optimizer =tf.keras.optimizers.Adam(),
-                loss = custom_loss,
-                metrics=[angle_acc])
+                loss = 'mse',
+                metrics='mse')
 
     pmaps = np.load('data/matrix_voice/test/pmap_2_src_clean.npy')
     stft_data = np.load('data/matrix_voice/test/stft_data_2_src_clean.npy')
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     print(train_labels[:20])
 
 
-    blstm.save("data/matrix_voice/models/blstm_semd.h5", overwrite=True)
+    blstm.save("data/matrix_voice/models/blstm_raspi.h5", overwrite=True)
     print("Saved model to disk")
 
 

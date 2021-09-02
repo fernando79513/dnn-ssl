@@ -1,3 +1,4 @@
+from operator import ne
 from scipy.io import wavfile
 from scipy import signal
 import numpy as np
@@ -10,6 +11,8 @@ import matplotlib.pyplot as plt
 from scipy.signal.spectral import stft
 
 from scipy.signal.windows.windows import cosine
+from tensorflow.core.framework.types_pb2 import DT_UINT16
+from tensorflow.python.keras.backend import dtype
 # import h5py
 
 from src.utils import logs
@@ -26,6 +29,8 @@ R = 0.03829
 C = 343
 f_array = np.linspace(0,8000,257)
 fs =16000
+T = 500
+F = 257
 
 
 def stft_t(wav):
@@ -72,7 +77,7 @@ def get_features():
     stfts = np.load(f'{data_path}stft_2_src_clean.npy')
     stft_data = np.load(f'{data_path}stft_data_2_src_clean.npy')
 
-    index = 15
+    index = 8
 
     mask = stft_data[:, 0] == 0
     test_data = stft_data[mask,:][index-1]
@@ -82,8 +87,7 @@ def get_features():
     filename = f"simulations/matrix_voice/test/2_src/clean_{index:0>4}.wav"
     fs, wav = wavfile.read(filename)
 
-    stft_mc, t = stft_t(wav)
-    print(t[:20])
+    stft_mc, times = stft_t(wav)
     print(stfts[0].shape)
     print(stft_data[0].shape)
 
@@ -119,45 +123,52 @@ def get_features():
     print(taus_0)
     print(taus_1)
 
-    d_1 = np.empty((7, len(f_array)), dtype=np.csingle)
-    d_2 = np.empty((7, len(f_array)), dtype=np.csingle)
-    for i, f in enumerate(f_array):
-        d_1[:,i] = np.array([np.exp(-1j*2*np.pi*f*tau) for tau in taus_0])
-        d_2[:,i] = np.array([np.exp(-1j*2*np.pi*f*tau) for tau in taus_1])
+    d_1 = np.empty((F, 7), dtype = np.complex)
+    d_2 = np.empty((F, 7), dtype = np.complex)
+    for f, freq in enumerate(f_array):
+        d_1[f,:] = np.array([np.exp(-1j*2*np.pi*freq*tau) for tau in taus_0])
+        d_2[f,:] = np.array([np.exp(-1j*2*np.pi*freq*tau) for tau in taus_1])
 
-    a_1 = np.empty((len(f_array), 7, len(t)))
-    a_2 = np.empty((len(f_array), 7,len(t)))
 
+
+    stft_mc = stft_mc[1:, :, :]
     print(stft_mc.shape)
-    stft_mc = np.moveaxis(stft_mc, 0, 1) 
-    for j in range(len(t)):
-        a_1[:,:,j] = np.abs(d_1.conj().T*stft_mc[:,1:,j])
-        a_2[:,:,j] = np.abs(d_2.conj().T*stft_mc[:,1:,j])
+    # stft_mc = np.moveaxis(stft_mc, 0, 1)
+    a_1 = np.empty((F,T))
+    a_2 = np.empty((F,T))     
+    
+    norm_d_1 = np.conjugate(d_1).T
+    norm_d_2 = np.conjugate(d_2).T
+
+    for t in range(T):
+        for f in range(F):
+            a_1[f,t] = np.abs(np.dot(d_1[f,:], (stft_mc[:,f,t])))
+            a_2[f,t] = np.abs(np.dot(d_2[f,:], (stft_mc[:,f,t])))
 
     print(type(stft_mc))
 
-    print(a_1[2].shape)
-    print(t.shape)
-    print(f.shape)
-    plt.pcolormesh(t, f_array, np.abs(a_2[2]), vmin=-20, vmax=30, shading='gouraud')
+    print(a_1.shape)
+    print(times.shape)
+    print(f_array.shape)
+    plt.pcolormesh(times[:500], f_array, a_2, vmin=-20, vmax=30, shading='gouraud')
     plt.title('STFT Magnitude')
     plt.ylabel('Frequency [Hz]')
     plt.xlabel('Time [sec]')
     plt.show()
     print(stft_mc[0].shape)
     # Zxx = a_1[3]
-    average =(a_1[0]+a_1[1]+a_1[2]+a_1[3]+a_1[4]+a_1[5]+a_1[6])/7
 
-    new_wav = signal.istft(average, fs=16000, nperseg=400, noverlap=240,
+    new_wav = signal.istft(a_2, fs=16000, nperseg=400, noverlap=240,
         nfft=512)
     new_wav = new_wav[1].astype(np.int16)
+    print(np.max(new_wav))
 
     print(wav.shape)
     mono = wav[:,1]
     # phase_map.plot_specgram(t , f , np.abs(a_1[1]))
     import sounddevice as sd
     print('playing sound using  pydub')
-    sd.play(new_wav[:160600], fs)
+    sd.play(new_wav, fs)
     # sd.play(mono, fs)
     sd.wait()
 
