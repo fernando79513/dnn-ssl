@@ -13,6 +13,8 @@ from src.utils import logs
 # from src.utils import csv_utils
 from src.utils import phase_map
 
+
+
 def get_sim_info(df):
 
     wav_path = 'wav/cmu_arctic/'
@@ -74,17 +76,20 @@ def compute_stft(params):
 
             stft_mc = phase_map.stft(wav)
             angles, lengths = get_sim_info(sim)
+
+            n = 20
             for i, chunk in enumerate(phase_map.split_stft_mc(stft_mc, 20)):
                 sample_i = 400 + ((i+1) * 160 * 20)
                 for j, length in enumerate(lengths):
                     if length < sample_i:
                         angles[j] = -1
                 # stft_data[id] = [
-                #   0- chunk_i, 
-                #   1- number of speakers, 
-                #   2- number of noises, 
-                #   3- speaker angle 0, 
-                #   4- speaker angle 1
+                #   0- 
+                #   1- chunk_i, 
+                #   2- number of speakers, 
+                #   3- number of noises, 
+                #   4- speaker angle 0, 
+                #   5- speaker angle 1
                 #   ]
 
                 stft_data.append(np.array([i, n_speakers, n_noises, angles[0],

@@ -22,25 +22,6 @@ from wandb.keras import WandbCallback
 
 
 
-def test_model(model,x,y):
-    y_pred = model.predict(x)
-    y_pred = np.argmax(y_pred,axis=1)
-    cm = confusion_matrix(y, y_pred)
-    print("Confusion Matrix:")
-    print(cm)
-    print("Classification report:")
-    print(classification_report(y, y_pred))
-
-#     plt.imshow(cm, cmap=plt.cm.Blues)
-#     plt.xlabel("Predicted labels")
-#     plt.ylabel("True labels")
-#     plt.xticks([], [])
-#     plt.yticks([], [])
-#     plt.title('Confusion matrix ')
-#     plt.colorbar()
-#     plt.show()
-#     plt.savefig(f"img/confusion_matrix")
-
 
 if __name__ == "__main__":
 
@@ -52,8 +33,7 @@ if __name__ == "__main__":
     mic_pairs = params['gcc_phat']['mic_pairs']
 
 
-
-    model = tf.keras.models.load_model('data/matrix_voice/models/blstm_pit.h5',
+    model = tf.keras.models.load_model('data/matrix_voice/models/blstm_semd.h5',
         custom_objects={
             "_pit_earth_mover_distance": pit_earth_mover_distance,
             "_pit_cce": pit_cce,
@@ -61,7 +41,7 @@ if __name__ == "__main__":
             "_roll_earth_mover_distance":roll_earth_mover_distance,
             })
     print('model loaded')
-    checkpoint_filepath = 'data/matrix_voice/checkpoint/'
+    checkpoint_filepath = 'data/matrix_voice/checkpoint/cnn_blstm_cce_1_src/'
     model.load_weights(checkpoint_filepath)
     print('weights loaded')
 
@@ -85,8 +65,8 @@ if __name__ == "__main__":
     # exit()
     # print(test_labels[:5])
 
-    s_pmaps, s_labels, angles = shuffle(pmaps, test_labels, angles)
-    # s_pmaps, s_labels, angles = pmaps[255:265], test_labels[255:265], angles[255:265]
+    # s_pmaps, s_labels, angles = shuffle(pmaps, test_labels, angles)
+    s_pmaps, s_labels, angles = pmaps[255:265], test_labels[255:265], angles[255:265]
     # import pdb;pdb.set_trace()
 
 
@@ -98,7 +78,7 @@ if __name__ == "__main__":
     # on new data using `predict`
     print("Generate predictions for 3 samples")
     t = time.perf_counter()
-    predictions = model.predict(s_pmaps[:300])
+    predictions = model.predict(s_pmaps[:10])
     print("predictions shape:", predictions.shape)
     elapsed = time.perf_counter() -t 
     print(elapsed)
@@ -108,38 +88,21 @@ if __name__ == "__main__":
 
     for i in range(10):
         # print(predictions[i])
-        plt.plot(s_labels[i,:(360//gamma)]+s_labels[i,(360//gamma):])
-        plt.plot(predictions[i,(360//gamma):])
-        plt.plot(predictions[i,:(360//gamma)])
+        fig, axs = plt.subplots(1, 1)
+        fig.set_size_inches(10, 5)
+        axs.set_title('CNN-BLSTM-SS | SMED | Dropout = 0,4')
+        axs.set_xlabel('Ángulo')
+        axs.set_xlim(0, 360)
+        axs.set_ylabel('Probabilidad')
+        axs.set_ylim(0, 0.6)
+        axs.grid(True)
+        axs.plot(s_labels[i,:(360//gamma)]+s_labels[i,(360//gamma):])
+        axs.plot(predictions[i,(360//gamma):])
+        axs.plot(predictions[i,:(360//gamma)])
         # plt.plot(s_labels[i])
         # plt.plot(predictions[i])
         # plt.show()
         plt.savefig(f"img/pred_{i:0>4}")
         plt.close()
 
-    test_model(model, s_pmaps,s_labels)
-    # import cv2 as cv
-    # import numpy as np
-
-    # size = (720,400)
-    # fourcc = cv.VideoWriter_fourcc(*'DIVX')
-    # out = cv.VideoWriter('sources.avi',fourcc,10, size)
-
-    # for i in range(len(predictions)):
-    #     pred_1 = predictions[i,:(360//gamma)]
-    #     pred_2 = predictions[i,(360//gamma):]
-    #     src_1 = np.argmax(predictions[i,:(360//gamma)])
-    #     src_2 = np.argmax(predictions[i,(360//gamma):])
-    #     true_1 = np.argmax(s_labels[i,:(360//gamma)])
-    #     true_2 = np.argmax(s_labels[i,(360//gamma):])
-    #     print(src_1)
-    #     img = np.full((400,720,3), 255, np.uint8)
-    #     cv.circle(img,(src_1*2, int((1-pred_1[src_1])*400)), 5, (150,150,40), -1)
-    #     cv.circle(img,(src_2*2, int((1-pred_2[src_2])*400)), 5, (40,150,150), -1)
-    #     cv.rectangle(img,(true_1*2-30, 5), (true_1*2+30, 395), (200,50,40), 3)
-    #     cv.rectangle(img,(true_2*2-30, 5), (true_2*2+30, 395), (200,50,40), 3)
-
-    #     out.write(img)
-
-    # out.release()
 

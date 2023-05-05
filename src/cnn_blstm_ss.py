@@ -74,7 +74,6 @@ def locnet_cnn (input_shape=(8,257,1), output_size=72,
 def locnet_blstm (locnet_cnn, input_shape=(20, 8, 257), q=36,
     drop = 0.4):
 
-    # TODO: use BLSTMP
     inputs = Input(shape=input_shape)
     # creating BLSTM
     time_dist = TimeDistributed(locnet_cnn)(inputs)
@@ -87,7 +86,6 @@ def locnet_blstm (locnet_cnn, input_shape=(20, 8, 257), q=36,
 
 def locnet_blstm_ss (locnet_cnn, input_shape=(20, 8, 257), q=36, drop = 0.4):
 
-    # TODO: use BLSTMP
     inputs = Input(shape=input_shape)
     # creating BLSTM
     time_dist = TimeDistributed(locnet_cnn)(inputs)

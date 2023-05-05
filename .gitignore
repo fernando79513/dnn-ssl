@@ -1,6 +1,7 @@
 .vscode
 *.pyc
 *.log
+*.npy
 simulations
 wav
 wandb
